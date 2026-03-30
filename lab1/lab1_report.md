@@ -67,6 +67,7 @@ sudo mkdir /etc/openvpn/ccd
 `sudo nano vars` 
 
 В открывшийся интерфейс вставляем:
+```
 export KEY_COUNTRY=«RU» 
 export KEY_PROVINCE="Moscow"
 export KEY_CITY="Moscow"
@@ -76,6 +77,7 @@ export KEY_CN="paninanq"
 export KEY_OU="paninanq"
 export KEY_NAME="vpn.paninanq.com"
 export KEY_ALTNAMES="vpn2.paninanq.com"
+```
 
 3. Настройка /etc/nat(FireWall)
 sudo nano /etc/nat
