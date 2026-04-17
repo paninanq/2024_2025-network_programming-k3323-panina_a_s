@@ -1,0 +1,37 @@
+# 2026-04-17 17:00:05 by RouterOS 7.20.8
+# system id = o/YXKuZqxzG
+#
+/interface bridge
+add name=loopback0
+/interface ethernet
+set [ find default-name=ether1 ] disable-running-check=no
+set [ find default-name=ether2 ] disable-running-check=no
+/interface ovpn-client
+add certificate=router.crt_0 cipher=aes256-cbc connect-to=192.144.13.28 \
+    mac-address=FE:2F:46:46:80:C7 name=ovpn-out1 user=router
+/port
+set 0 name=serial0
+/ppp profile
+add change-tcp-mss=yes dns-server=8.8.8.8,8.8.4.4 local-address=10.8.0.2 \
+    name=ovpn-client-profile only-one=yes remote-address=10.8.0.10 \
+    use-encryption=required
+/routing ospf instance
+add disabled=no name=instance0 router-id=10.100.0.2
+/routing ospf area
+add disabled=no instance=instance0 name=backbone2
+/ip address
+add address=10.100.0.2 interface=loopback0 network=10.100.0.2
+/ip dhcp-client
+add interface=ether1
+add interface=ether2
+/routing ospf interface-template
+add area=backbone2 disabled=no interfaces=ovpn-out1,loopback0,ether1 type=ptp
+add area=backbone2 disabled=no interfaces=ovpn-out1,loopback0,ether1 type=ptp
+/system clock
+set time-zone-name=Europe/Moscow
+/system identity
+set name=chr1
+/system ntp client
+set enabled=yes
+/system ntp client servers
+add address=pool.ntp.org

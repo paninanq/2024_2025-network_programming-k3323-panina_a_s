@@ -1,0 +1,12 @@
+Flags: D - dynamic 
+ 0 D address=192.168.88.10%ether1 area=backbone2 state=ptp network-type=ptp 
+     cost=1 use-bfd=no retransmit-interval=5s transmit-delay=1s 
+     hello-interval=10s dead-interval=40s 
+
+ 1 D address=10.0.0.2%ovpn-out1 area=backbone2 state=ptp network-type=ptp 
+     cost=1 use-bfd=no retransmit-interval=5s transmit-delay=1s 
+     hello-interval=10s dead-interval=40s 
+
+ 2 D address=10.100.0.2%loopback0 area=backbone2 state=ptp network-type=ptp 
+     cost=1 use-bfd=no retransmit-interval=5s transmit-delay=1s 
+     hello-interval=10s dead-interval=40s

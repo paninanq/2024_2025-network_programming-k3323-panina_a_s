@@ -1,0 +1,4 @@
+new_user: ansible
+new_password: StrongPassword123
+ntp_server: pool.ntp.org
+ospf_area: backbone
