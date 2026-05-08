@@ -54,6 +54,8 @@ docker compose exec netbox /opt/netbox/netbox/manage.py createsuperuser
 
 ["export_netbox"](.playbooks/export_netbox.yml)
 
+Данный playbook обращается к API NetBox. Он забирает основные объекты, которые нужны для дальнейшей работы: устройства, интерфейсы, IP-адреса, префиксы, роли, платформы и теги. Дополнительно используется lookup из коллекции `netbox.netbox`.
+
 После выполнения плейбука информация собрана в файл lab3/out/netbox_dump.json.
 
 ["output_netbox"](.out/netbox_dump.json)
@@ -61,6 +63,8 @@ docker compose exec netbox /opt/netbox/netbox/manage.py createsuperuser
 #### Cценарий, при котором на основе данных из Netbox можно настроить 2 CHR, изменить имя устройства, добавить IP адрес на устройство
 
 ["configure_chr_from_netbox"](.playbooks/configure_chr_from_netbox.yml)
+
+Этот playbook берет данные об устройствах из NetBox и применяет их к CHR через RouterOS CLI. Сначала он находит устройство в NetBox по имени из inventory, затем получает назначенные IP-адреса и формирует желаемую конфигурацию. В безопасном режиме playbook только показывает, какие изменения будут выполнены, а для реального применения используется переменная `apply_changes=true`.
 
 Я поменяла имя роутера 
 
@@ -73,7 +77,7 @@ docker compose exec netbox /opt/netbox/netbox/manage.py createsuperuser
 
 ["sync_serial_to_netbox"](.playbooks/sync_serial_to_netbox.yml)
 
-Я забираю серийный номер из команды `/system license print` в плейбуке
+Этот playbook подключается к CHR, получает идентификатор устройства и при необходимости записывает его обратно в NetBox. Для CHR серийный номер берется из вывода команды `/system license print`. По умолчанию playbook работает в режиме проверки, а обновление NetBox выполняется при запуске с переменной `update_netbox=true`.
 
 После проката плейбука получаю запись серийного номера в netbox
 
