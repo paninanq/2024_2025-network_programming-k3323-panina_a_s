@@ -1,0 +1,80 @@
+---
+- name: Export NetBox data to JSON file
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    netbox_endpoints:
+      - dcim/sites
+      - dcim/manufacturers
+      - dcim/device-types
+      - dcim/device-roles
+      - dcim/platforms
+      - dcim/devices
+      - dcim/interfaces
+      - ipam/prefixes
+      - ipam/ip-addresses
+      - extras/tags
+
+  tasks:
+    - name: Ensure output directory exists
+      ansible.builtin.file:
+        path: out
+        state: directory
+        mode: "0755"
+      check_mode: false
+
+    - name: Read devices using NetBox collection lookup
+      ansible.builtin.set_fact:
+        devices_via_nb_lookup: >-
+          {{
+            query(
+              'netbox.netbox.nb_lookup',
+              'devices',
+              api_endpoint=netbox_url,
+              token=netbox_token,
+              validate_certs=false
+            )
+          }}
+      changed_when: false
+
+    - name: Read NetBox API endpoints
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/{{ item }}/?limit=0"
+        method: GET
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+          Accept: "application/json"
+        return_content: true
+        validate_certs: false
+      loop: "{{ netbox_endpoints }}"
+      register: netbox_api_data
+      changed_when: false
+
+    - name: Build single NetBox dump object
+      ansible.builtin.set_fact:
+        netbox_dump: >-
+          {{
+            netbox_dump | default({}) |
+            combine({
+              item.item | replace('/', '_'): item.json.results | default(item.json)
+            })
+          }}
+      loop: "{{ netbox_api_data.results }}"
+      changed_when: false
+
+    - name: Add nb_lookup result to dump
+      ansible.builtin.set_fact:
+        netbox_dump: >-
+          {{
+            netbox_dump |
+            combine({'devices_via_nb_lookup': devices_via_nb_lookup})
+          }}
+      changed_when: false
+
+    - name: Save NetBox dump to file
+      ansible.builtin.copy:
+        dest: out/netbox_dump.json
+        content: "{{ netbox_dump | to_nice_json }}"
+        mode: "0644"
+      check_mode: false

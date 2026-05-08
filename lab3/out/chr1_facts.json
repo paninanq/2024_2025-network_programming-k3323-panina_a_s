@@ -1,0 +1,17 @@
+{
+    "net_arch": "x86_64                                 ",
+    "net_cpu_load": "2%                                     ",
+    "net_gather_subset": [
+        "default",
+        "hardware"
+    ],
+    "net_hostname": "chr1",
+    "net_memfree_mb": 300.4,
+    "net_memtotal_mb": 512.0,
+    "net_model": null,
+    "net_serialnum": null,
+    "net_spacefree_mb": 69.0,
+    "net_spacetotal_mb": 89.2,
+    "net_uptime": "4h6m25s                                ",
+    "net_version": "7.20.8 (long-term)                     "
+}

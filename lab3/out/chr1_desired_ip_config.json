@@ -1,0 +1,18 @@
+[
+    {
+        "address": "10.0.0.2/24",
+        "interface": "ovpn-out1"
+    },
+    {
+        "address": "10.100.0.2/32",
+        "interface": "loopback0"
+    },
+    {
+        "address": "192.168.0.109/24",
+        "interface": "ether1"
+    },
+    {
+        "address": "192.168.64.3/24",
+        "interface": "ether2"
+    }
+]

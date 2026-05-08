@@ -1,0 +1,6 @@
+/system license print
+system-id: o/YXKuZqxzG
+      level: free
+
+/system routerboard print
+bad command name routerboard (line 1 column 9)

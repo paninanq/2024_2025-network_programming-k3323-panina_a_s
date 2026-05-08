@@ -1,0 +1,142 @@
+---
+- name: Configure CHR devices from NetBox data
+  hosts: all
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/mikrotik.yml
+
+  vars:
+    # По умолчанию сценарий работает в безопасном режиме:
+    # только показывает, что будет сделано.
+    # Для реального применения запускай с -e apply_changes=true
+    apply_changes: false
+
+  tasks:
+    - name: Get NetBox device by inventory hostname
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/dcim/devices/?name={{ inventory_hostname | urlencode }}"
+        method: GET
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+          Accept: "application/json"
+        return_content: true
+        validate_certs: false
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      register: nb_device
+      changed_when: false
+
+    - name: Check that device exists in NetBox
+      ansible.builtin.assert:
+        that:
+          - nb_device.json.count == 1
+        fail_msg: "Device {{ inventory_hostname }} was not found in NetBox or name is not unique."
+
+    - name: Save NetBox device id
+      ansible.builtin.set_fact:
+        nb_device_id: "{{ nb_device.json.results[0].id }}"
+
+    - name: Get IP addresses assigned to this device in NetBox
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/ipam/ip-addresses/?device_id={{ nb_device_id }}&limit=0"
+        method: GET
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+          Accept: "application/json"
+        return_content: true
+        validate_certs: false
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      register: nb_ip_addresses
+      changed_when: false
+
+    - name: Build desired IP address list from NetBox
+      ansible.builtin.set_fact:
+        desired_ip_addresses: []
+
+    - name: Add assigned NetBox IP addresses to desired list
+      ansible.builtin.set_fact:
+        desired_ip_addresses: >-
+          {{
+            desired_ip_addresses +
+            [
+              {
+                'address': item.address,
+                'interface': item.assigned_object.name
+              }
+            ]
+          }}
+      loop: "{{ nb_ip_addresses.json.results }}"
+      when:
+        - item.assigned_object is not none
+        - item.assigned_object.name is defined
+
+    - name: Show desired IP configuration from NetBox
+      ansible.builtin.debug:
+        msg:
+          device: "{{ inventory_hostname }}"
+          apply_changes: "{{ apply_changes }}"
+          desired_ip_addresses: "{{ desired_ip_addresses }}"
+
+    - name: Read current RouterOS identity
+      community.routeros.command:
+        commands:
+          - /system identity print
+      register: current_identity
+      changed_when: false
+
+    - name: Show current RouterOS identity
+      ansible.builtin.debug:
+        var: current_identity.stdout
+
+    - name: Change RouterOS identity from NetBox device name
+      community.routeros.command:
+        commands:
+          - /system identity set name={{ inventory_hostname }}
+      when:
+        - apply_changes | bool
+        - "'name: ' ~ inventory_hostname not in current_identity.stdout[0]"
+
+    - name: Check existing IP addresses on RouterOS
+      community.routeros.command:
+        commands:
+          - /ip address print terse where address={{ item.address }}
+      loop: "{{ desired_ip_addresses }}"
+      register: ip_check
+      changed_when: false
+
+    - name: Show IP addresses that are already present
+      ansible.builtin.debug:
+        msg: "On {{ inventory_hostname }} check {{ item.item.address }} on {{ item.item.interface }} result={{ item.stdout[0] | default('') }}"
+      loop: "{{ ip_check.results }}"
+
+    - name: Add missing IP addresses from NetBox to RouterOS
+      community.routeros.command:
+        commands:
+          - /ip address add address={{ item.item.address }} interface={{ item.item.interface }} comment="from NetBox lab3"
+      loop: "{{ ip_check.results }}"
+      when:
+        - apply_changes | bool
+        - item.stdout[0] | trim == ""
+
+    - name: Ensure output directory exists
+      ansible.builtin.file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+
+    - name: Save desired configuration to local JSON file
+      ansible.builtin.copy:
+        dest: "{{ output_dir }}/{{ inventory_hostname }}_desired_ip_config.json"
+        content: "{{ desired_ip_addresses | to_nice_json }}"
+        mode: "0644"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local

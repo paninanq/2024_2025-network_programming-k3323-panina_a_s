@@ -1,0 +1,138 @@
+---
+- name: Collect CHR serial number and update NetBox
+  hosts: all
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/mikrotik.yml
+
+  vars:
+    # По умолчанию только показывает найденный serial.
+    # Для записи в NetBox запускай с -e update_netbox=true
+    update_netbox: false
+
+  tasks:
+    - name: Get NetBox device by inventory hostname
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/dcim/devices/?name={{ inventory_hostname | urlencode }}"
+        method: GET
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+          Accept: "application/json"
+        return_content: true
+        validate_certs: false
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      register: nb_device
+      changed_when: false
+
+    - name: Check that device exists in NetBox
+      ansible.builtin.assert:
+        that:
+          - nb_device.json.count == 1
+        fail_msg: "Device {{ inventory_hostname }} was not found in NetBox or name is not unique."
+
+    - name: Save NetBox device id
+      ansible.builtin.set_fact:
+        nb_device_id: "{{ nb_device.json.results[0].id }}"
+
+    - name: Collect RouterOS facts
+      community.routeros.facts:
+        gather_subset:
+          - hardware
+
+    - name: Read RouterOS license 
+      community.routeros.command:
+        commands:
+          - /system license print
+      register: ros_serial_raw
+      changed_when: false
+
+    - name: Extract system-id from license info
+      ansible.builtin.set_fact:
+        serial_from_license: >-
+          {{
+            ros_serial_raw.stdout_lines | default([], true) | flatten
+            | select('search', 'system-id:')
+            | map('regex_replace', '^.*system-id:[ \t]*/?', '')
+            | map('regex_replace', '[ \t].*$', '')
+            | first
+            | default('', true)
+          }}
+
+    - name: Choose final serial value
+      ansible.builtin.set_fact:
+        device_serial: >-
+          {{
+            (ansible_net_serialnum | default('', true) | string | trim)
+            or (serial_from_license | default('', true) | string | trim)
+            or ('unknown-' ~ inventory_hostname)
+          }}
+
+    - name: Show detected serial number
+      ansible.builtin.debug:
+        msg:
+          device: "{{ inventory_hostname }}"
+          ansible_net_serialnum: "{{ ansible_net_serialnum | default('', true) }}"
+          serial_from_license: "{{ serial_from_license }}"
+          serial: "{{ device_serial }}"
+          update_netbox: "{{ update_netbox }}"
+
+    - name: Ensure output directory exists
+      ansible.builtin.file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+
+    - name: Update serial number in NetBox
+      ansible.builtin.uri:
+        url: "{{ netbox_url }}/api/dcim/devices/{{ nb_device_id }}/"
+        method: PATCH
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          serial: "{{ device_serial }}"
+        return_content: true
+        validate_certs: false
+        status_code:
+          - 200
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      when: update_netbox | bool
+      register: netbox_serial_update
+
+    - name: Save collected RouterOS facts locally
+      ansible.builtin.copy:
+        dest: "{{ output_dir }}/{{ inventory_hostname }}_facts.json"
+        content: "{{ ansible_facts | to_nice_json }}"
+        mode: "0644"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+
+    - name: Save raw serial command output locally
+      ansible.builtin.copy:
+        dest: "{{ output_dir }}/{{ inventory_hostname }}_serial_raw.txt"
+        content: |
+          commands:
+          - /system license print
+
+          stdout:
+          {{ ros_serial_raw.stdout | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+          stdout_lines:
+          {{ ros_serial_raw.stdout_lines | default([]) | to_nice_yaml(indent=2) | indent(2, true) }}
+
+        mode: "0644"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local

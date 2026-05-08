@@ -1,0 +1,5 @@
+---
+netbox_url: "http://82.202.137.94:8000"
+netbox_token: "4qIVJZAiSQNAqnbC1HCBAvDuNE4UMDpaZVsrCXNO"
+
+output_dir: "{{ playbook_dir }}/../out"
